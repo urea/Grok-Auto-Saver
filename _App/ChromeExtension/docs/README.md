@@ -68,6 +68,6 @@ pip install Pillow
   - ※設定方法：Chrome右上の `︙` > `設定` > `ダウンロード` から変更可能です。オンのままだと、保存のたびに確認ダイアログが表示されてしまいます。
 - **フォルダ名:** 保存パスを固定しているため、ルートフォルダ名は変更しないでください。
 
-## 📄 License
+##  License
 
 [MIT License](https://opensource.org/licenses/MIT)

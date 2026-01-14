@@ -5,7 +5,7 @@
 const STORAGE_KEY = "grok_saver_history";
 const FILENAME_KEY = "grok_saver_filenames";
 const PROMPT_TEXT_KEY = "grok_saver_prompt_texts";
-const MIN_FILE_SIZE_KB = 20;
+const MIN_FILE_SIZE_KB = 50;
 const ROOT_FOLDER = "Grok-Auto-Saver";
 
 const monitoredDownloadIds = new Map();

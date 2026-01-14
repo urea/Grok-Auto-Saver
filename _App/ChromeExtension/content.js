@@ -3,7 +3,7 @@
 // 変更点: プロンプトの重複判定を「文字列」から「要素」に変更し、同一プロンプトの再利用に対応
 
 const CONFIG = {
-    minSizeKB: 20,
+    minSizeKB: 50,
     targetAlt: "Generated image",
     videoUrlPattern: "/post/",
     downloadButtonSelector: 'button[aria-label="ダウンロード"]',
@@ -51,7 +51,19 @@ function checkAndSend(img) {
     if (!isTarget) return;
 
     const size = estimateSizeKB(src);
-    if (size < CONFIG.minSizeKB) return;
+    if (size < CONFIG.minSizeKB) {
+        // Visual Feedback: Too Small (Orange)
+        if (!processedCache.has(src)) { // Only show once per src to avoid spamming
+            processedCache.add(src); // Mark as processed so we don't check again
+            img.style.transition = "outline 0.3s";
+            img.style.outline = "4px solid #FFA500"; // Orange
+            setTimeout(() => {
+                img.style.outline = "none";
+            }, 1000);
+            log(`Skipped small image (${size.toFixed(1)}KB): ${src.slice(0, 50)}...`);
+        }
+        return;
+    }
 
     if (!img.complete || img.naturalWidth === 0) return;
 
