@@ -1,4 +1,4 @@
-// background.js - GrokSaver v2.6
+// background.js - GrokSaver v2.6.1
 // 変更点: Favoritesログ生成、高画質リカバリー、動的ファイル名リネーム対応
 // 履歴の正確性と、ページ更新等による二重保存の防止を両立しました。
 

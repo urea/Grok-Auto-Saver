@@ -490,7 +490,7 @@ def generate_viewer_html(fav_set):
 
 def main():
     print("=" * 60)
-    print(" 🧹 Grok Organizer (v2.6 Dev)")
+    print(" 🧹 Grok Organizer (v2.6.1 Dev)")
     print("=" * 60)
     try:
         move_videos()
