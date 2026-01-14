@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "GrokSaver",
+  "version": "2.6",
+  "description": "Grokの生成画像を自動保存し、プロンプト履歴を管理します。(v2.6 Stable)",
+  "permissions": [
+    "downloads",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://grok.com/*",
+    "https://assets.grok.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://grok.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "GrokSaver履歴"
+  }
+}

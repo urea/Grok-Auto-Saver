@@ -1,0 +1,7 @@
+_Data/
+4x/
+*.lnk
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db

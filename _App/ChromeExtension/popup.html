@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      width: 400px;
+      height: 500px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      margin: 0;
+      padding: 10px;
+      background-color: #f9f9f9;
+    }
+
+    h3 {
+      margin: 0 0 10px 0;
+      color: #333;
+      border-bottom: 2px solid #ddd;
+      padding-bottom: 5px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .header-buttons {
+      display: flex;
+      gap: 5px;
+    }
+
+    #prompt-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      height: 420px;
+      overflow-y: auto;
+    }
+
+    .prompt-item {
+      background: white;
+      border: 1px solid #eee;
+      border-radius: 5px;
+      padding: 10px;
+      margin-bottom: 8px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      transition: transform 0.1s;
+    }
+
+    .prompt-item:active {
+      transform: scale(0.99);
+    }
+
+    .prompt-date {
+      font-size: 0.75rem;
+      color: #888;
+      margin-bottom: 4px;
+    }
+
+    .prompt-text {
+      font-size: 0.9rem;
+      line-height: 1.4;
+      color: #333;
+      word-break: break-all;
+      white-space: pre-wrap;
+    }
+
+    .copy-btn {
+      float: right;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 3px;
+      padding: 2px 8px;
+      font-size: 0.75rem;
+      cursor: pointer;
+    }
+
+    .copy-btn:hover {
+      background: #0056b3;
+    }
+
+    #empty-msg {
+      text-align: center;
+      color: #999;
+      margin-top: 50px;
+    }
+
+    .action-btn {
+      font-size: 0.8rem;
+      border: none;
+      cursor: pointer;
+      text-decoration: underline;
+      background: none;
+      padding: 0 5px;
+    }
+
+    #export-btn {
+      color: #28a745;
+    }
+
+    #clear-btn {
+      color: #d9534f;
+    }
+
+    #grok-btn {
+      color: #007bff;
+      font-weight: bold;
+    }
+  </style>
+</head>
+
+<body>
+  <h3>
+    Grokプロンプト履歴
+    <div class="header-buttons">
+      <button id="grok-btn" class="action-btn">Grok</button>
+      <button id="export-btn" class="action-btn">エクスポート</button>
+      <button id="clear-btn" class="action-btn">履歴消去</button>
+    </div>
+  </h3>
+  <div id="prompt-list"></div>
+  <div id="empty-msg" style="display:none;">履歴はありません</div>
+  <script src="popup.js"></script>
+</body>
+
+</html>
