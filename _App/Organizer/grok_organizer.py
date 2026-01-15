@@ -153,7 +153,7 @@ def clean_garbage_images():
 def organize_prompts():
     """プロンプトのマージ処理 (連続重複のみ排除)"""
     print(f"\n📝 プロンプト整理処理開始...")
-    print(f"\n📝 プロンプト整理処理開始...")
+
     prompts_dir = DATA_DIR / "Prompts"
     if not prompts_dir.exists(): return 0
     archive_dir = prompts_dir / "Archived"
@@ -490,7 +490,7 @@ def generate_viewer_html(fav_set):
 
 def main():
     print("=" * 60)
-    print(" 🧹 Grok Organizer (v2.6.1 Dev)")
+    print(" 🧹 Grok Organizer (v2.6.2 Dev)")
     print("=" * 60)
     try:
         move_videos()

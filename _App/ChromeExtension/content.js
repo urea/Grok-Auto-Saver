@@ -1,4 +1,4 @@
-// content.js - GrokSaver v2.6.1
+// content.js - GrokSaver v2.6.2
 // 機能: 画像保存、プロンプト監視、動画自動クリック、Favorites判定
 // 変更点: プロンプトの重複判定を「文字列」から「要素」に変更し、同一プロンプトの再利用に対応
 
@@ -56,7 +56,7 @@ function checkAndSend(img) {
         if (!processedCache.has(src)) { // Only show once per src to avoid spamming
             processedCache.add(src); // Mark as processed so we don't check again
             img.style.transition = "outline 0.3s";
-            img.style.outline = "4px solid #FFA500"; // Orange
+            img.style.outline = "2px solid #FFA500"; // Orange
             setTimeout(() => {
                 img.style.outline = "none";
             }, 1000);
@@ -81,7 +81,7 @@ function checkAndSend(img) {
 
     const borderColor = isFavorites ? "#ff00ff" : "#00ff00";
     img.style.transition = "outline 0.3s";
-    img.style.outline = `4px solid ${borderColor}`;
+    img.style.outline = `2px solid ${borderColor}`;
     setTimeout(() => {
         img.style.outline = "none";
     }, 1500);
@@ -106,17 +106,21 @@ function checkPrompts() {
         });
 
         el.dataset.grokSaverProcessed = "true";
+        el.style.transition = "border-bottom 0.5s";
         el.style.borderBottom = "2px solid #00ff00";
+        setTimeout(() => {
+            el.style.borderBottom = "none";
+        }, 2000);
     });
 }
 
 // ------------------------------------
 // 動画 & ダウンロードボタン監視ロジック
 // ------------------------------------
+
 function checkVideoAndClick() {
     const currentUrl = window.location.href;
     if (!currentUrl.includes(CONFIG.videoUrlPattern)) return;
-    if (processedPosts.has(currentUrl)) return;
 
     const videoLabel = Array.from(document.querySelectorAll('span.sr-only, span.font-semibold'))
         .find(el => el.textContent.trim() === "動画");
@@ -141,10 +145,29 @@ function checkVideoAndClick() {
 
     const btn = document.querySelector(CONFIG.downloadButtonSelector);
     if (btn) {
+        // Just clicked? Don't look at history yet (prevent Green -> Orange override)
+        if (btn.dataset.grokClicked === "true") return;
+
+        // Visual Feedback: Check if already processed
+        if (processedPosts.has(currentUrl)) {
+            // Already processed: Show Orange (Skipped)
+            if (btn.style.borderColor !== "rgb(255, 165, 0)") {
+                btn.style.border = "2px solid #FFA500"; // Orange
+            }
+            return;
+        }
+
         log(`動画検知: DLボタン自動クリック`);
         savePostHistory(currentUrl);
-        btn.style.border = "3px solid #0000ff";
-        setTimeout(() => btn.style.border = "none", 1000);
+
+        btn.dataset.grokClicked = "true"; // Flag as clicked
+        btn.style.border = "2px solid #00ff00"; // Green for Clicked
+
+        setTimeout(() => {
+            btn.style.border = "none";
+            btn.dataset.grokClicked = "false"; // Reset flag
+        }, 1000);
+
         btn.click();
     }
 }
