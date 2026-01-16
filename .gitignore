@@ -1,5 +1,6 @@
 _Data/
 _Dev/
+4x/
 *.lnk
 __pycache__/
 *.pyc
