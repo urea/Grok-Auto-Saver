@@ -383,7 +383,9 @@ def generate_viewer_html(fav_set):
         .media-item {{ background: #000; cursor: pointer; border-radius: 4px; overflow: hidden; position: relative; }}
         .media-item img, .media-item video {{ width: 100%; height: auto; display: block; transition: transform 0.2s; }}
         .media-item:hover img {{ transform: scale(1.02); }}
-        .video-label {{ position: absolute; top: 5px; right: 5px; background: rgba(0,0,0,0.7); color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; pointer-events: none; }}
+        .video-label {{ position: absolute; top: 5px; right: 5px; background: rgba(0,0,0,0.7); color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; pointer-events: auto; cursor: pointer; transition: background 0.2s; }}
+        .video-label:hover {{ background: rgba(187, 134, 252, 0.8); color: black; }}
+        .media-item.selected {{ outline: 3px solid var(--accent); z-index: 5; }}
         #modal {{ display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1000; justify-content: center; align-items: center; }}
         #modal.active {{ display: flex; }}
         #modal-content {{ position: relative; max-width: 95%; max-height: 95%; display: flex; justify-content: center; align-items: center; width: 100%; height: 100%; }}
@@ -415,6 +417,7 @@ def generate_viewer_html(fav_set):
     <script>
         const data = {json_data}; const dates = {dates_json};
         let currentFilter = 'all', currentDate = null, isSearchMode = false, currentMediaList = [], currentMediaIndex = -1;
+        let selectedIndices = new Set();
         window.onload = () => {{ renderDateList(); if (dates.length > 0) selectDate(dates[0]); }};
         document.addEventListener('keydown', (e) => {{ if (document.getElementById('modal').classList.contains('active')) {{ if (e.key === 'Escape') closeModal(); if (e.key === 'ArrowLeft') navigateModal(-1); if (e.key === 'ArrowRight') navigateModal(1); }} }});
         function toggleSearchMode() {{ isSearchMode = !isSearchMode; document.getElementById('normal-sidebar-content').classList.toggle('hidden', isSearchMode); document.getElementById('search-sidebar-content').classList.toggle('hidden', !isSearchMode); if (isSearchMode) document.getElementById('search-input').focus(); }}
@@ -432,6 +435,7 @@ def generate_viewer_html(fav_set):
             currentDate = date; document.querySelectorAll('.date-item').forEach(el => el.classList.remove('active'));
             const activeItem = document.getElementById('date-' + date); if (activeItem) activeItem.classList.add('active');
             const container = document.getElementById('content-area'); container.innerHTML = ''; currentMediaList = [];
+            selectedIndices.clear(); // Clear selection on navigate
             data[date].forEach(group => {{
                 const validMedia = group.media.filter(m => currentFilter === 'all' || m.is_favorite); if (validMedia.length === 0) return;
                 renderGroup({{ ...group, media: validMedia }}, container, null);
@@ -449,9 +453,13 @@ def generate_viewer_html(fav_set):
             div.appendChild(header);
             const grid = document.createElement('div'); grid.className = 'media-grid';
             group.media.forEach((m, i) => {{
-                const item = document.createElement('div'); item.className = 'media-item'; item.onclick = () => openModalByIndex(baseIndex + i);
-                item.draggable = true; item.ondragstart = (e) => {{ const url = new URL(m.path, window.location.href).href; e.dataTransfer.setData('DownloadURL', `image/jpeg:${{m.name}}:${{url}}`); }};
-                item.innerHTML = m.type === 'video' ? `<video src="${{m.path}}#t=0.1" muted></video><div class="video-label">VIDEO</div>` : `<img src="${{m.path}}" loading="lazy">`;
+                const item = document.createElement('div'); item.className = 'media-item'; 
+                // Set ID for selection logic
+                const globalIdx = baseIndex + i; item.dataset.idx = globalIdx;
+                item.onclick = (e) => handleItemClick(e, globalIdx, m.type);
+                item.draggable = true; 
+                item.ondragstart = (e) => handleDragStart(e, globalIdx, m);
+                item.innerHTML = m.type === 'video' ? `<video src="${{m.path}}#t=0.1" muted></video><div class="video-label" onclick="event.stopPropagation(); copyToClipboard('${{m.path}}', this)">VIDEO</div>` : `<img src="${{m.path}}" loading="lazy">`;
                 grid.appendChild(item);
             }});
             div.appendChild(grid); parent.appendChild(div);
@@ -477,6 +485,76 @@ def generate_viewer_html(fav_set):
             const cur = m.scrollTop; if (dir === 'next') {{ for (const g of groups) if (g.offsetTop > cur + 5) {{ g.scrollIntoView({{ behavior: 'smooth' }}); return; }} }}
             else {{ for (let i = groups.length - 1; i >= 0; i--) if (groups[i].offsetTop < cur - 5) {{ groups[i].scrollIntoView({{ behavior: 'smooth' }}); return; }} scrollToTop(); }}
         }}
+        function handleItemClick(e, idx, type) {{
+            if (type === 'video') {{ openModalByIndex(idx); return; }}
+            if (e.ctrlKey) {{
+                // Toggle selection
+                if (selectedIndices.has(idx)) selectedIndices.delete(idx);
+                else selectedIndices.add(idx);
+                updateSelectionVisuals();
+            }} else {{
+                // Normal click
+                if (selectedIndices.size > 0) {{
+                    selectedIndices.clear();
+                    updateSelectionVisuals();
+                }}
+                openModalByIndex(idx);
+            }}
+        }}
+        function updateSelectionVisuals() {{
+            document.querySelectorAll('.media-item').forEach(el => {{
+                const idx = parseInt(el.dataset.idx);
+                if (selectedIndices.has(idx)) el.classList.add('selected');
+                else el.classList.remove('selected');
+            }});
+        }}
+        function handleDragStart(e, idx, m) {{
+            // Construct full path helper (same logic as copyToClipboard)
+            const getFullPath = (relPath) => {{
+                let bp = window.location.pathname;
+                if (bp.match(/^\/[a-zA-Z]:\//)) bp = bp.substring(1);
+                bp = decodeURIComponent(bp);
+                const dn = bp.substring(0, bp.lastIndexOf('/') + 1);
+                return (dn + relPath).replace(/\//g, '\\\\');
+            }};
+
+            if (selectedIndices.has(idx)) {{
+                // Batch drag
+                const files = [];
+                selectedIndices.forEach(i => {{
+                    const media = currentMediaList[i];
+                    if (media.type !== 'video') files.push(getFullPath(media.path));
+                }});
+                const list = files.join('\\n');
+                e.dataTransfer.setData('text/plain', list);
+                // Also standard single file backup if only one
+                if (files.length === 1) {{
+                     const url = new URL(currentMediaList[idx].path, window.location.href).href;
+                     e.dataTransfer.setData('DownloadURL', `image/jpeg:${{currentMediaList[idx].name}}:${{url}}`);
+                }}
+            }} else {{
+                // Single drag
+                selectedIndices.clear(); updateSelectionVisuals(); // Clear others if dragging unselected
+                const url = new URL(m.path, window.location.href).href;
+                const mime = m.type === 'video' ? 'video/mp4' : 'image/jpeg';
+                e.dataTransfer.setData('DownloadURL', `${{mime}}:${{m.name}}:${{url}}`);
+            }}
+        }}
+        function copyToClipboard(relPath, btn) {{
+             try {{
+                let basePath = window.location.pathname;
+                if (basePath.match(/^\/[a-zA-Z]:\//)) basePath = basePath.substring(1);
+                basePath = decodeURIComponent(basePath);
+                const dirName = basePath.substring(0, basePath.lastIndexOf('/') + 1);
+                let fullPath = dirName + relPath;
+                fullPath = fullPath.replace(/\//g, '\\\\');
+                navigator.clipboard.writeText(fullPath).then(() => {{
+                    const originalText = btn.innerText;
+                    btn.innerText = "COPIED!";
+                    setTimeout(() => btn.innerText = originalText, 1500);
+                }}).catch(err => alert('Copy failed: ' + err));
+             }} catch (e) {{ alert('Error: ' + e); }}
+        }}
     </script>
 </body></html>"""
 
@@ -490,7 +568,7 @@ def generate_viewer_html(fav_set):
 
 def main():
     print("=" * 60)
-    print(" 🧹 Grok Organizer (v2.6.2 Dev)")
+    print(" 🧹 Grok Organizer (v2.7.0)")
     print("=" * 60)
     try:
         move_videos()

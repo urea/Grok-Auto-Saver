@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "GrokSaver",
-  "version": "2.6.2",
-  "description": "Grokの生成画像を自動保存し、プロンプト履歴を管理します。(v2.6.2 Stable)",
+  "version": "2.7.0",
+  "description": "Grokの生成画像を自動保存し、プロンプト履歴を管理します。(v2.7 Stable)",
   "permissions": [
     "downloads",
     "storage"

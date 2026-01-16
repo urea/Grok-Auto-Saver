@@ -1,4 +1,4 @@
-// content.js - GrokSaver v2.6.2
+// content.js - GrokSaver v2.7.0
 // 機能: 画像保存、プロンプト監視、動画自動クリック、Favorites判定
 // 変更点: プロンプトの重複判定を「文字列」から「要素」に変更し、同一プロンプトの再利用に対応
 
