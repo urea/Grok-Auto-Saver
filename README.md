@@ -36,8 +36,11 @@ Chrome拡張機能による「リアルタイム自動収集」と、Pythonス�
 
 ### ステップ1: フォルダの配置
 
-このリポジトリをダウンロードし、フォルダごと **PCの「ダウンロード」フォルダの中** に配置してください。
-フォルダ名は **`Grok-Auto-Saver`** である必要があります。
+1. [Grok-Auto-Saver GitHubリポジトリ](https://github.com/urea/Grok-Auto-Saver) にアクセスします。
+2. ページ右上にある緑色の **「Code」** ボタンをクリックします。
+2. **「Download ZIP」** を選択して、プロジェクト全体をダウンロードします。
+3. ダウンロードしたZIPファイルを解凍し、中身のフォルダ一式を **PCの「ダウンロード」フォルダの中** に配置してください。
+4. フォルダ名は **`Grok-Auto-Saver`** に変更（リネーム）してください（解凍時は `Grok-Auto-Saver-main` 等になっている場合があります）。
 
 推奨パス: `C:\Users\ユーザー名\Downloads\Grok-Auto-Saver`
 
@@ -68,6 +71,6 @@ pip install Pillow
   - ※設定方法：Chrome右上の `︙` > `設定` > `ダウンロード` から変更可能です。オンのままだと、保存のたびに確認ダイアログが表示されてしまいます。
 - **フォルダ名:** 保存パスを固定しているため、ルートフォルダ名は変更しないでください。
 
-## 📄 License
+##  License
 
 [MIT License](https://opensource.org/licenses/MIT)
