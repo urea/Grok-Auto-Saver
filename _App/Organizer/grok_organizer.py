@@ -16,6 +16,19 @@ except ImportError:
 
 import sys
 
+# 色出力用 (任意)
+try:
+    from colorama import init, Fore, Style
+    init()
+except ImportError:
+    class Fore:
+        CYAN = ""
+        GREEN = ""
+        RED = ""
+        YELLOW = ""
+    class Style:
+        RESET_ALL = ""
+
 # ==========================================
 # 設定エリア
 # ==========================================
