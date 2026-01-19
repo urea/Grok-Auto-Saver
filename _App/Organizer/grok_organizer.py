@@ -634,7 +634,7 @@ def generate_viewer_html(fav_set):
 
 def main():
     print("=" * 60)
-    print(" [Grok Organizer] (v3.0.0)")
+    print(f"{Fore.CYAN}Grok Organizer (v3.1.0){Style.RESET_ALL} - 画像整理 & ビューアー生成")
     print("=" * 60)
     try:
         move_videos()
