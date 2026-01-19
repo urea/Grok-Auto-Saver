@@ -2,7 +2,7 @@ _Data/
 _Dev/
 4x/
 *.lnk
-_App/Organizer/*.exe
+
 __pycache__/
 *.pyc
 .DS_Store

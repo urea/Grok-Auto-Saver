@@ -5,7 +5,7 @@ Grok-Auto-Saver の全ての変更点は、このファイルに記録されま�
 ## [3.1] - 2026-01-19
 
 ### 追加 (Added)
-- **かんたん実行 (EXE版):** Python環境がなくても動作する `Grok Organizer.exe` のサポートを開始。GitHub Releasesからダウンロードして配置するだけで利用可能に。
+- **かんたん実行 (EXE版):** Python環境がなくても動作する `Grok Organizer.exe` を同梱。`_App/Organizer` フォルダから直接実行可能に。
 
 ### 変更 (Changed)
 - **フォルダ構成の整理:** EXE化に伴い、Organizer関連ファイル（スクリプト、EXE）を `_App/Organizer` フォルダに集約。ルートフォルダをクリーンな状態に保つよう改善。
