@@ -14,12 +14,20 @@ try:
 except ImportError:
     Image = None
 
+import sys
+
 # ==========================================
 # 設定エリア
 # ==========================================
 
 DOWNLOAD_DIR = Path(os.path.expanduser("~")) / "Downloads"
-BASE_DIR = Path(__file__).parent.resolve()
+
+if getattr(sys, 'frozen', False):
+    # EXE実行時
+    BASE_DIR = Path(sys.executable).parent.resolve()
+else:
+    # スクリプト実行時
+    BASE_DIR = Path(__file__).parent.resolve()
 # 構成変更対応: _App/Organizer/grok_organizer.py に配置される想定
 # ルート: Grok-Auto-Saver/
 if BASE_DIR.name.lower() == "organizer" and BASE_DIR.parent.name.lower() == "_app":

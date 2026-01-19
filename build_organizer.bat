@@ -17,9 +17,16 @@ pyinstaller --noconfirm --onefile --console --name "Grok Organizer" --clean "_Ap
 
 if %errorlevel% equ 0 (
     echo.
+    echo Moving EXE to _App/Organizer...
+    move /Y "dist\Grok Organizer.exe" "_App\Organizer\"
+    rmdir /S /Q dist
+    rmdir /S /Q build
+    del "Grok Organizer.spec"
+
+    echo.
     echo ========================================================
     echo  Build SUCCESS!
-    echo  Executable is located in the 'dist' folder.
+    echo  Executable is located in '_App/Organizer/'.
     echo ========================================================
     pause
 ) else (
