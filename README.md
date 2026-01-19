@@ -45,13 +45,22 @@ Chrome拡張機能による「リアルタイム自動収集」と、Pythonス�
 
 推奨パス: `C:\Users\ユーザー名\Downloads\Grok-Auto-Saver`
 
-### ステップ2: Pythonライブラリの準備
+### ステップ2: 実行環境の準備
 
-画像整理ツールに使用する `Pillow` をインストールしてください。
+#### 【推奨】 かんたんコース (EXE版)
+Pythonのインストールは不要です。
 
-```bash
-pip install Pillow
-```
+1. GitHubの **「Releases」** ページから、最新バージョン (`v3.0` 等) を開きます。
+2. `Grok Organizer.exe` (またはZIP) をダウンロードし、`Grok-Auto-Saver` フォルダの中に置きます。
+
+#### 【上級者】 Pythonコース (スクリプト版)
+ソースコードを直接実行したい方向けです。
+
+1. Pythonをインストールしてください。
+2. 画像整理ツールに使用する `Pillow` をインストールしてください。
+   ```bash
+   pip install Pillow
+   ```
 
 ### ステップ3: Chrome拡張機能の導入
 
@@ -63,7 +72,7 @@ pip install Pillow
 ## 🎮 使い方
 
 1. **収集:** Chromeで Grok を使い、画像を生成したりタイムラインを眺めます。拡張機能が自動でデータを蓄積します。
-2. **整理:** **`_App/Organizer`** フォルダ内の `grok_organizer.py` を実行します。
+2. **整理:** **`Grok Organizer.exe`** をダブルクリックして実行します（スクリプト版の場合は `grok_organizer.py`）。
 3. **閲覧:** 自動生成された `Grok_Viewer.html` で、あなたの作品群を振り返ることができます。
 
 ## ⚠️ 注意事項
