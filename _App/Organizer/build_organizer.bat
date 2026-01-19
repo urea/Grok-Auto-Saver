@@ -13,12 +13,12 @@ if %errorlevel% neq 0 (
 
 echo.
 echo Building EXE...
-pyinstaller --noconfirm --onefile --console --name "Grok Organizer" --clean "_App/Organizer/grok_organizer.py"
+pyinstaller --noconfirm --onefile --console --name "Grok Organizer" --clean "grok_organizer.py"
 
 if %errorlevel% equ 0 (
     echo.
-    echo Moving EXE to _App/Organizer...
-    move /Y "dist\Grok Organizer.exe" "_App\Organizer\"
+    echo Moving EXE to current folder...
+    move /Y "dist\Grok Organizer.exe" .
     rmdir /S /Q dist
     rmdir /S /Q build
     del "Grok Organizer.spec"
@@ -26,7 +26,7 @@ if %errorlevel% equ 0 (
     echo.
     echo ========================================================
     echo  Build SUCCESS!
-    echo  Executable is located in '_App/Organizer/'.
+    echo  Executable is located in this folder.
     echo ========================================================
     pause
 ) else (
