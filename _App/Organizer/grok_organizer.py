@@ -49,7 +49,7 @@ def is_safe_directory(path):
 
 def move_videos():
     """動画ファイルを日付フォルダへ移動し、ファイル名に日時を付与する"""
-    print(f"🎬 動画移動処理開始...")
+    print(f" [Videos] 動画移動処理開始...")
     count = 0
     target_files = list(DOWNLOAD_DIR.glob("grok-video-*.mp4"))
 
@@ -82,30 +82,42 @@ def move_videos():
                     counter += 1
             
             shutil.move(str(file_path), str(target_path))
-            print(f"   ✅ [移動] {file_path.name} -> {date_str}/{target_path.name}")
+            print(f"   [OK] [移動] {file_path.name} -> {date_str}/{target_path.name}")
             count += 1
         except Exception as e:
-            print(f"   ❌ [エラー] {file_path.name}: {e}")
+            print(f"   [Error] [エラー] {file_path.name}: {e}")
     return count
 
 def clean_garbage_images():
     """不要な画像を削除し、リアルタイムにログを表示する"""
-    print(f"\n🖼️ 画像クリーニング処理開始...")
+    print(f"\n [Cleaning] 画像クリーニング処理開始...")
     if not is_safe_directory(GROK_ROOT_DIR):
-        print(f"   ⚠️ 警告: 安全装置作動。専用フォルダ内で実行してください。")
+        print(f"   [Warning] 安全装置作動。専用フォルダ内で実行してください。")
         return 0
     if Image is None:
-        print("   ⚠️  Pillowライブラリがないため解像度チェックをスキップします。")
+        print("   [Warning] Pillowライブラリがないため解像度チェックをスキップします。")
         return 0
 
     count = 0
-    print("   🔍 全ファイルをスキャン中...")
+    today_str = datetime.now().strftime('%Y%m%d')
+    target_dir = DATA_DIR / "Images" / today_str
+    
+    if not target_dir.exists():
+        print(f"   [Info] 本日のフォルダ ({today_str}) が見つかりません。スキップします。")
+        return 0
+
+    print(f"   [Search] 検査対象フォルダ: {target_dir.name}")
     
     all_image_files = []
     for ext in ["*.png", "*.jpg", "*.jpeg", "*.webp"]:
-        all_image_files.extend(list(DATA_DIR.rglob(ext))) # DATA_DIR以下をスキャン
+        all_image_files.extend(list(target_dir.glob(ext))) # rglobからglobに変更し、対象を限定
 
-    for file_path in all_image_files:
+    total_images = len(all_image_files)
+    print(f"   [Info] 検査対象: {total_images} 件の画像")
+
+    for i, file_path in enumerate(all_image_files, 1):
+        if i % 20 == 0:
+            print(f"\r   [Processing] 画像検査進行中... ({i}/{total_images})", end="", flush=True)
         try:
             # 除外フォルダチェック（_Data以下のシステムフォルダ等）
             if any(p in file_path.parts for p in ["System", "Prompts"]):
@@ -147,12 +159,15 @@ def clean_garbage_images():
         except Exception:
             pass
 
-    print(f"   ✅ 処理完了")
+            pass
+    
+    print() # Progress bar cleanup
+    print(f"   [OK] 処理完了")
     return count
 
 def organize_prompts():
     """プロンプトのマージ処理 (連続重複のみ排除)"""
-    print(f"\n📝 プロンプト整理処理開始...")
+    print(f"\n [Prompts] プロンプト整理処理開始...")
 
     prompts_dir = DATA_DIR / "Prompts"
     if not prompts_dir.exists(): return 0
@@ -174,9 +189,11 @@ def organize_prompts():
     if merged_file_path.exists():
         all_files_to_read.append(merged_file_path)
 
-    print(f"   📂 処理対象ファイル: {len(source_files)}件 (新規)")
+    print(f"   [Info] 処理対象ファイル: {len(source_files)}件 (新規)")
     
-    for txt_path in all_files_to_read:
+    for i, txt_path in enumerate(all_files_to_read, 1):
+        if i % 5 == 0:
+            print(f"\r   [Processing] プロンプト読み込み中... ({i}/{len(all_files_to_read)})", end="", flush=True)
         try:
             with open(txt_path, "r", encoding="utf-8-sig") as f:
                 content = f.read()
@@ -225,11 +242,12 @@ def organize_prompts():
                     try: shutil.move(str(src), str(archive_dir / src.name))
                     except Exception: pass
         except Exception: pass
+    print() # Progress bar cleanup
     return len(all_prompts)
 
 def organize_favorites():
     """Favoritesログの統合"""
-    print(f"\n⭐ Favoritesログ整理処理開始...")
+    print(f"\n [Favorites] Favoritesログ整理処理開始...")
     logs_dir = DATA_DIR / "System" / "FavLogs"
     if not logs_dir.exists(): return set()
     archive_dir, system_dir = logs_dir / "Archived", DATA_DIR / "System"
@@ -287,7 +305,7 @@ def get_file_info(path, type_label, fav_set):
         'type': type_label, 'name': path.name, 'time': ts,
         'date_str': datetime.fromtimestamp(ts).strftime('%Y-%m-%d'), 
         'path': os.path.relpath(path, GROK_ROOT_DIR).replace("\\", "/"),
-        'is_favorite': path.name in fav_set
+        'is_favorite': path.name in fav_set or type_label == 'video'
     }
 
 def collect_and_group_data(fav_set):
@@ -296,7 +314,12 @@ def collect_and_group_data(fav_set):
     for ext in ["*.png", "*.jpg", "*.jpeg", "*.webp", "*.mp4"]:
         media_files.extend(list(DATA_DIR.rglob(ext)))
 
-    for path in media_files:
+    total_media = len(media_files)
+    print(f"   [Info] ビューアー用データ収集: {total_media} ファイル")
+
+    for i, path in enumerate(media_files, 1):
+        if i % 50 == 0:
+             print(f"\r   [Processing] データ収集中... ({i}/{total_media})", end="", flush=True)
         if path.parent.name in ["Prompts", "System", "Organizer", "ChromeExtension", "icons"]: continue
         if path.parent.parent.name == "System": continue # Prevent FavLogs/Archived
         if "Organizer" in path.parts or "_App" in path.parts: continue
@@ -324,7 +347,31 @@ def collect_and_group_data(fav_set):
     for date_key, items in date_buckets.items():
         items.sort(key=lambda x: x['time'], reverse=True)
         grouped_list, current_media_group = [], []
+        
+        # Extract favorites for this specific date
+        days_favorites = [item for item in items if item.get('is_favorite')]
+        
+        # Add "Day's Favorites" to the top of this date's section if any exist
+        if days_favorites:
+            # Sort favorites by time descending
+            days_favorites.sort(key=lambda x: x['time'], reverse=True)
+            
+            # Create a fake prompt object for the header
+            fav_prompt = {
+                'type': 'prompt',
+                'name': 'System',
+                'time': days_favorites[0]['time'] + 0.1, # Slightly newer than latest favorite to act as header
+                'date_str': date_key,
+                'content': "⭐ Favorites", # Simple header, as it's already under the date section
+                'is_favorite': True
+            }
+            grouped_list.append({"prompt": fav_prompt, "media": days_favorites})
+
         for item in items:
+            # Skip items that are already in favorites to prevent duplication
+            if item.get('is_favorite'):
+                continue
+
             if item['type'] in ('image', 'video'):
                 current_media_group.append(item)
             elif item['type'] == 'prompt':
@@ -333,15 +380,19 @@ def collect_and_group_data(fav_set):
                     current_media_group = []
         if current_media_group:
             grouped_list.append({"prompt": None, "media": current_media_group})
+            
         if grouped_list:
             timeline_data[date_key] = grouped_list
+    print() # Progress bar cleanup
     return timeline_data
 
 def generate_viewer_html(fav_set):
     """ご提示いただいた過去のコードのUIデザインを完全に復元したビューアーの生成"""
-    print(f"\n🌐 ビューアー生成処理開始...")
+    print(f"\n [Viewer] ビューアー生成処理開始...")
     data = collect_and_group_data(fav_set)
-    if not data: return
+    if not data:
+        print("   ⚠️ 表示するデータが見つかりませんでした。")
+        return
     dates = sorted(list(data.keys()), reverse=True)
     json_data = json.dumps(data, ensure_ascii=False)
     dates_json = json.dumps(dates)
@@ -397,6 +448,9 @@ def generate_viewer_html(fav_set):
         #nav-buttons {{ padding: 10px; border-top: 1px solid var(--border); display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; background: var(--sidebar-bg); }}
         .nav-btn {{ height: 35px; background: rgba(50, 50, 50, 0.5); color: #ccc; border: 1px solid #444; border-radius: 4px; cursor: pointer; font-size: 1.1rem; display: flex; justify-content: center; align-items: center; opacity: 0.6; }}
         .nav-btn:hover {{ background: var(--accent); color: #000; border-color: var(--accent); opacity: 1; }}
+        .toggle-icon {{ cursor: pointer; display: inline-block; margin-right: 8px; transition: transform 0.2s; user-select: none; }}
+        .group.collapsed .toggle-icon {{ transform: rotate(-90deg); }}
+        .group.collapsed .media-grid {{ display: none; }}
     </style>
 </head>
 <body>
@@ -446,10 +500,11 @@ def generate_viewer_html(fav_set):
             const baseIndex = currentMediaList.length; group.media.forEach(m => currentMediaList.push(m));
             const div = document.createElement('div'); div.className = 'group';
             const header = document.createElement('div'); header.className = 'prompt-header';
+            header.onclick = () => toggleGroup(div); header.style.cursor = 'pointer';
             if (group.prompt) {{
                 const label = dateLabel ? `[${{dateLabel}}] ` : '';
-                header.innerHTML = `<div class="prompt-meta">${{label}}${{new Date(group.prompt.time * 1000).toLocaleString()}}</div><div class="prompt-text">${{group.prompt.content}}</div>`;
-            }} else header.innerHTML = '<div class="no-prompt">画像のみ</div>';
+                header.innerHTML = `<span class="toggle-icon">▼</span><div class="prompt-meta" style="display:inline;">${{label}}${{new Date(group.prompt.time * 1000).toLocaleString()}}</div><div class="prompt-text">${{group.prompt.content}}</div>`;
+            }} else header.innerHTML = '<span class="toggle-icon">▼</span><div class="no-prompt" style="display:inline;">画像のみ</div>';
             div.appendChild(header);
             const grid = document.createElement('div'); grid.className = 'media-grid';
             group.media.forEach((m, i) => {{
@@ -500,6 +555,9 @@ def generate_viewer_html(fav_set):
                 }}
                 openModalByIndex(idx);
             }}
+        }}
+        function toggleGroup(groupDiv) {{
+            groupDiv.classList.toggle('collapsed');
         }}
         function updateSelectionVisuals() {{
             document.querySelectorAll('.media-item').forEach(el => {{
@@ -561,14 +619,14 @@ def generate_viewer_html(fav_set):
     try:
         with open(VIEWER_PATH, "w", encoding="utf-8") as f:
             f.write(html_content)
-        print(f"   ✅ 生成完了: {VIEWER_PATH}")
+        print(f"   [OK] 生成完了: {VIEWER_PATH}")
         webbrowser.open(f"file://{VIEWER_PATH}")
     except Exception as e:
-        print(f"   ❌ 生成失敗: {e}")
+        print(f"   [Error] 生成失敗: {e}")
 
 def main():
     print("=" * 60)
-    print(" 🧹 Grok Organizer (v2.7.0)")
+    print(" [Grok Organizer] (v3.0.0)")
     print("=" * 60)
     try:
         move_videos()
@@ -577,9 +635,9 @@ def main():
         fav_set = organize_favorites()
         generate_viewer_html(fav_set) 
         print("-" * 60)
-        print(f"✨ 全ての整理が完了しました。")
+        print(f" [Done] 全ての整理が完了しました。")
     except Exception as e:
-        print(f"\n❌ エラーが発生しました: {e}")
+        print(f"\n [Error] エラーが発生しました: {e}")
 
 if __name__ == "__main__":
     main()
