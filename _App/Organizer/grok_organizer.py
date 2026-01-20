@@ -110,7 +110,7 @@ def move_videos():
     return count
 
 def clean_garbage_images():
-    """不要な画像を削除し、リアルタイムにログを表示する"""
+    """不要な画像を削除し、リアルタイムにログを表示する (Smart Scan対応)"""
     print(f"\n [Cleaning] 画像クリーニング処理開始...")
     if not is_safe_directory(GROK_ROOT_DIR):
         print(f"   [Warning] 安全装置作動。専用フォルダ内で実行してください。")
@@ -120,18 +120,65 @@ def clean_garbage_images():
         return 0
 
     count = 0
-    today_str = datetime.now().strftime('%Y%m%d')
-    target_dir = DATA_DIR / "Images" / today_str
+    now = datetime.now()
+    today_str = now.strftime('%Y%m%d')
+    scan_targets = []
     
-    if not target_dir.exists():
-        print(f"   [Info] 本日のフォルダ ({today_str}) が見つかりません。スキップします。")
+    # 1. 常に当日のフォルダは対象
+    today_dir = DATA_DIR / "Images" / today_str
+    if today_dir.exists():
+        scan_targets.append(today_dir)
+        
+    # 2. 24時間経過チェック (Smart Scan)
+    state_file = DATA_DIR / "System" / "organizer_state.json"
+    last_full_scan = 0
+    
+    if state_file.exists():
+        try:
+            with open(state_file, 'r') as f:
+                state = json.load(f)
+                last_full_scan = state.get('last_full_scan_ts', 0)
+        except Exception: pass
+        
+    elapsed = now.timestamp() - last_full_scan
+    is_full_scan = elapsed > 86400 # 24 hours
+    
+    if is_full_scan:
+        print(f"   [Info] 前回の全検査から24時間経過 ({int(elapsed/3600)}h)。全フォルダを検査します。")
+        images_root = DATA_DIR / "Images"
+        if images_root.exists():
+            for p in images_root.glob("*"):
+                if p.is_dir() and re.match(r'^\d{8}$', p.name):
+                    if p != today_dir: # 重複除外
+                        scan_targets.append(p)
+                        
+        # 状態更新
+        try:
+            (DATA_DIR / "System").mkdir(parents=True, exist_ok=True)
+            with open(state_file, 'w') as f:
+                json.dump({'last_full_scan_ts': now.timestamp()}, f)
+        except Exception: pass
+    else:
+        hours_until = int((86400-elapsed)/3600)
+        if hours_until < 0: hours_until = 0
+        print(f"   [Info] 全検査はスキップします (次回まであと {hours_until}h)。本日のフォルダのみ対象。")
+
+    if not scan_targets:
+        print(f"   [Info] 画像フォルダが見つかりません。")
         return 0
 
-    print(f"   [Search] 検査対象フォルダ: {target_dir.name}")
-    
+    # 対象ファイル収集
     all_image_files = []
-    for ext in ["*.png", "*.jpg", "*.jpeg", "*.webp"]:
-        all_image_files.extend(list(target_dir.glob(ext))) # rglobからglobに変更し、対象を限定
+    # フォルダ数が多い場合は詳細表示を省略
+    if len(scan_targets) > 5:
+        print(f"   [Search] {len(scan_targets)} フォルダを対象に画像を検索中...")
+    else:
+        folder_names = ", ".join([d.name for d in scan_targets])
+        print(f"   [Search] 検査対象: {folder_names}")
+
+    for target_dir in scan_targets:
+        for ext in ["*.png", "*.jpg", "*.jpeg", "*.webp"]:
+            all_image_files.extend(list(target_dir.glob(ext)))
 
     total_images = len(all_image_files)
     print(f"   [Info] 検査対象: {total_images} 件の画像")
@@ -140,7 +187,7 @@ def clean_garbage_images():
         if i % 20 == 0:
             print(f"\r   [Processing] 画像検査進行中... ({i}/{total_images})", end="", flush=True)
         try:
-            # 除外フォルダチェック（_Data以下のシステムフォルダ等）
+            # 除外フォルダチェック
             if any(p in file_path.parts for p in ["System", "Prompts"]):
                 continue
             
@@ -151,10 +198,11 @@ def clean_garbage_images():
                 should_remove, reason = True, "User Profile Picture"
             
             # 1. Check file size (Delete if < 100KB)
-            file_size_kb = file_path.stat().st_size / 1024
-            if file_size_kb < 100:
-                should_remove = True
-                reason = f"File size too small: {file_size_kb:.1f}KB"
+            if not should_remove:
+                file_size_kb = file_path.stat().st_size / 1024
+                if file_size_kb < 100:
+                    should_remove = True
+                    reason = f"File size too small: {file_size_kb:.1f}KB"
 
             if not should_remove:
                 with Image.open(file_path) as img:
@@ -165,21 +213,14 @@ def clean_garbage_images():
                         should_remove = True
                         reason = f"Small resolution: {width}x{height}"
                     
-                    # 3. Check depth/mode (Delete if not RGB/L/P - e.g. potentially problematic RGBA if intended)
-                    # Note: Original logic for mode deletion if any can be preserved here.
-                    # As requested "Deletion by depth", usually implies low bit depth or specific modes.
-                    # Assuming we keep existing mode checks if they existed or just rely on the user's prompt implying we should look at it.
-                    # For now, we'll keep the resolution check which is the primary "quality" filter alongside size.
-                    elif img.mode in ('RGBA', 'CMYK'): # This was the original mode check
+                    elif img.mode in ('RGBA', 'CMYK'):
                         should_remove, reason = True, f"Mode: {img.mode}"
             
             if should_remove:
-                print(f"   🗑️ [削除] {file_path.name} ({reason})", flush=True)
+                print(f"\n   🗑️ [削除] {file_path.name} ({reason})", flush=True)
                 os.remove(file_path)
                 count += 1
         except Exception:
-            pass
-
             pass
     
     print() # Progress bar cleanup
@@ -647,7 +688,7 @@ def generate_viewer_html(fav_set):
 
 def main():
     print("=" * 60)
-    print(f"{Fore.CYAN}Grok Organizer (v3.1.0){Style.RESET_ALL} - 画像整理 & ビューアー生成")
+    print(f"{Fore.CYAN}Grok Organizer (v3.2.0){Style.RESET_ALL} - 画像整理 & ビューアー生成")
     print("=" * 60)
     try:
         move_videos()
