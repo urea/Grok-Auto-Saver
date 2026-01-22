@@ -111,19 +111,16 @@ def move_videos():
     return count
 
 def remove_content_duplicates(target_dirs, fav_set=None):
-    """コンテンツハッシュ(MD5)による重複画像の削除"""
+    """コンテンツハッシュ(MD5)による重複画像の削除 (フォルダ内限定)"""
     if fav_set is None: fav_set = set()
-    print(f"   [Duplicate] 重複チェック開始 (Target: {len(target_dirs)} folders)...")
-    
-    hash_map = {} # {md5: [path1, path2, ...]}
-    new_favorites = [] # List of filenames to add to DB
-    scanned_count = 0
+    total_del_count = 0
+    new_favorites_global = [] # List of filenames to add to DB
     
     for d in target_dirs:
+        hash_map = {} # {md5: [path1, path2, ...]}
         for ext in ["*.png", "*.jpg", "*.jpeg", "*.webp"]:
             for p in d.glob(ext):
                 if not p.is_file(): continue
-                scanned_count += 1
                 try:
                     with open(p, "rb") as f:
                         file_hash = hashlib.md5(f.read()).hexdigest()
@@ -132,42 +129,37 @@ def remove_content_duplicates(target_dirs, fav_set=None):
                     else:
                         hash_map[file_hash] = [p]
                 except Exception: pass
-    
-    del_count = 0
-    for md5, paths in hash_map.items():
-        if len(paths) < 2: continue
         
-        # Determine which to keep
-        # Priority: Keep Oldest (Original)
-        # Sort by mtime ASC (Oldest first)
-        paths.sort(key=lambda x: x.stat().st_mtime)
-        
-        keeper = paths[0]
-        removals = paths[1:]
-        
-        # Check Favorite Inheritance
-        # If any removed file is a Favorite AND keeper is NOT, inherit status
-        is_keeper_fav = keeper.name in fav_set
-        has_removed_fav = any(p.name in fav_set for p in removals)
-        
-        if has_removed_fav and not is_keeper_fav:
-            print(f"   ⭐ [Favorite] {keeper.name} がFavoritesステータスを継承しました。")
-            new_favorites.append(keeper.name)
-            fav_set.add(keeper.name) # Update in-memory set for subsequent checks
-        
-        for p in removals:
-            try:
-                print(f"   🗑️ [Duplicate] 削除: {p.name} (Keep: {keeper.name})")
-                os.remove(p)
-                del_count += 1
-            except Exception as e:
-                print(f"   ⚠️ [Error] 削除失敗: {p.name} ({e})")
+        for md5, paths in hash_map.items():
+            if len(paths) < 2: continue
+            
+            # フォルダ内での重複を整理 (一番古いものを残す)
+            paths.sort(key=lambda x: x.stat().st_mtime)
+            keeper = paths[0]
+            removals = paths[1:]
+            
+            # Check Favorite Inheritance
+            is_keeper_fav = keeper.name in fav_set
+            has_removed_fav = any(p.name in fav_set for p in removals)
+            
+            if has_removed_fav and not is_keeper_fav:
+                print(f"   ⭐ [Favorite] {keeper.name} がFavoritesステータスを継承しました。")
+                new_favorites_global.append(keeper.name)
+                fav_set.add(keeper.name)
+            
+            for p in removals:
+                try:
+                    print(f"   🗑️ [Duplicate] 削除: {p.name} (Keep: {keeper.name})")
+                    os.remove(p)
+                    total_del_count += 1
+                except Exception as e:
+                    print(f"   ⚠️ [Error] 削除失敗: {p.name} ({e})")
                 
-    if del_count > 0:
-        print(f"   [Duplicate] {del_count} 件の重複ファイルを削除しました。")
-        
+    if total_del_count > 0:
+        print(f"   [Duplicate] 合計 {total_del_count} 件の重複ファイルを削除しました。")
+    
     # Save inherited favorites if any
-    if new_favorites:
+    if new_favorites_global:
         try:
             db_path = DATA_DIR / "System" / FAVORITES_DB_FILE
             current_data = []
@@ -175,13 +167,12 @@ def remove_content_duplicates(target_dirs, fav_set=None):
                 with open(db_path, "r", encoding="utf-8") as f:
                     current_data = json.load(f)
             
-            # Append new ones
-            for name in new_favorites:
+            for name in new_favorites_global:
                 current_data.append({"filename": name})
                 
             with open(db_path, "w", encoding="utf-8") as f:
                 json.dump(current_data, f, indent=2, ensure_ascii=False)
-            print(f"   [System] {len(new_favorites)} 件のFavorites情報を更新・保存しました。")
+            print(f"   [System] {len(new_favorites_global)} 件のFavorites情報を統合しました。")
         except Exception as e:
             print(f"   ⚠️ [Error] Favorites保存失敗: {e}")
 
@@ -205,39 +196,66 @@ def clean_garbage_images(fav_set=None):
     if today_dir.exists():
         scan_targets.append(today_dir)
         
-    # 2. 24時間経過チェック (Smart Scan)
+    # 2. 状態の読み込み (Smart Scan)
     state_file = DATA_DIR / "System" / "organizer_state.json"
     last_full_scan = 0
+    folder_counts = {}
     
     if state_file.exists():
         try:
             with open(state_file, 'r') as f:
                 state = json.load(f)
                 last_full_scan = state.get('last_full_scan_ts', 0)
+                folder_counts = state.get('folder_counts', {})
         except Exception: pass
         
-    elapsed = now.timestamp() - last_full_scan
-    is_full_scan = elapsed > 86400 # 24 hours
+    last_full_scan_date = datetime.fromtimestamp(last_full_scan).date()
+    current_date = now.date()
+    is_full_scan = current_date > last_full_scan_date
     
     if is_full_scan:
-        print(f"   [Info] 前回の全検査から24時間経過 ({int(elapsed/3600)}h)。全フォルダを検査します。")
+        print(f"   [Info] 本日最初の実行（または前回から日が経過）のため、全フォルダを検査します。")
         images_root = DATA_DIR / "Images"
         if images_root.exists():
+            skipped_folders = 0
             for p in images_root.glob("*"):
                 if p.is_dir() and re.match(r'^\d{8}$', p.name):
-                    if p != today_dir: # 重複除外
+                    # 今日のフォルダは常にスキャン
+                    if p == today_dir:
                         scan_targets.append(p)
+                        continue
+                    
+                    # ファイル数（拡張子問わず）に変化があるかチェック
+                    current_count = len(list(p.glob("*")))
+                    if folder_counts.get(p.name) == current_count:
+                        skipped_folders += 1
+                        continue
                         
-        # 状態更新
-        try:
-            (DATA_DIR / "System").mkdir(parents=True, exist_ok=True)
-            with open(state_file, 'w') as f:
-                json.dump({'last_full_scan_ts': now.timestamp()}, f)
-        except Exception: pass
+                    scan_targets.append(p)
+            
+            if skipped_folders > 0:
+                print(f"   [Info] {skipped_folders} フォルダは変更がないためスキップされました。")
     else:
-        hours_until = int((86400-elapsed)/3600)
-        if hours_until < 0: hours_until = 0
-        print(f"   [Info] 全検査はスキップします (次回まであと {hours_until}h)。本日のフォルダのみ対象。")
+        print(f"   [Info] 本日は既に全検査済みのため、本日のフォルダのみを対象にします。")
+        if today_dir.exists():
+            scan_targets.append(today_dir)
+
+    # 状態の更新準備
+    new_folder_counts = folder_counts.copy()
+    images_root = DATA_DIR / "Images"
+    if images_root.exists():
+        for p in images_root.glob("*"):
+            if p.is_dir() and re.match(r'^\d{8}$', p.name):
+                new_folder_counts[p.name] = len(list(p.glob("*")))
+
+    try:
+        (DATA_DIR / "System").mkdir(parents=True, exist_ok=True)
+        with open(state_file, 'w') as f:
+            json.dump({
+                'last_full_scan_ts': now.timestamp(),
+                'folder_counts': new_folder_counts
+            }, f)
+    except Exception: pass
 
     if not scan_targets:
         print(f"   [Info] 画像フォルダが見つかりません。")
