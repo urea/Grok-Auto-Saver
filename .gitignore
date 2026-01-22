@@ -9,3 +9,9 @@ __pycache__/
 Thumbs.db
 Grok_Viewer.html
 .vscode/
+
+# Build artifacts
+**/.venv/
+build/
+dist/
+*.spec
