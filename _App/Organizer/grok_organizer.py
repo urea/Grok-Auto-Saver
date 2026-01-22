@@ -4,6 +4,7 @@ import glob
 import json
 import html
 import re
+import hashlib
 import webbrowser
 from pathlib import Path
 from datetime import datetime
@@ -109,7 +110,82 @@ def move_videos():
             print(f"   [Error] [エラー] {file_path.name}: {e}")
     return count
 
-def clean_garbage_images():
+def remove_content_duplicates(target_dirs, fav_set=None):
+    """コンテンツハッシュ(MD5)による重複画像の削除"""
+    if fav_set is None: fav_set = set()
+    print(f"   [Duplicate] 重複チェック開始 (Target: {len(target_dirs)} folders)...")
+    
+    hash_map = {} # {md5: [path1, path2, ...]}
+    new_favorites = [] # List of filenames to add to DB
+    scanned_count = 0
+    
+    for d in target_dirs:
+        for ext in ["*.png", "*.jpg", "*.jpeg", "*.webp"]:
+            for p in d.glob(ext):
+                if not p.is_file(): continue
+                scanned_count += 1
+                try:
+                    with open(p, "rb") as f:
+                        file_hash = hashlib.md5(f.read()).hexdigest()
+                    if file_hash in hash_map:
+                        hash_map[file_hash].append(p)
+                    else:
+                        hash_map[file_hash] = [p]
+                except Exception: pass
+    
+    del_count = 0
+    for md5, paths in hash_map.items():
+        if len(paths) < 2: continue
+        
+        # Determine which to keep
+        # Priority: Keep Oldest (Original)
+        # Sort by mtime ASC (Oldest first)
+        paths.sort(key=lambda x: x.stat().st_mtime)
+        
+        keeper = paths[0]
+        removals = paths[1:]
+        
+        # Check Favorite Inheritance
+        # If any removed file is a Favorite AND keeper is NOT, inherit status
+        is_keeper_fav = keeper.name in fav_set
+        has_removed_fav = any(p.name in fav_set for p in removals)
+        
+        if has_removed_fav and not is_keeper_fav:
+            print(f"   ⭐ [Favorite] {keeper.name} がFavoritesステータスを継承しました。")
+            new_favorites.append(keeper.name)
+            fav_set.add(keeper.name) # Update in-memory set for subsequent checks
+        
+        for p in removals:
+            try:
+                print(f"   🗑️ [Duplicate] 削除: {p.name} (Keep: {keeper.name})")
+                os.remove(p)
+                del_count += 1
+            except Exception as e:
+                print(f"   ⚠️ [Error] 削除失敗: {p.name} ({e})")
+                
+    if del_count > 0:
+        print(f"   [Duplicate] {del_count} 件の重複ファイルを削除しました。")
+        
+    # Save inherited favorites if any
+    if new_favorites:
+        try:
+            db_path = DATA_DIR / "System" / FAVORITES_DB_FILE
+            current_data = []
+            if db_path.exists():
+                with open(db_path, "r", encoding="utf-8") as f:
+                    current_data = json.load(f)
+            
+            # Append new ones
+            for name in new_favorites:
+                current_data.append({"filename": name})
+                
+            with open(db_path, "w", encoding="utf-8") as f:
+                json.dump(current_data, f, indent=2, ensure_ascii=False)
+            print(f"   [System] {len(new_favorites)} 件のFavorites情報を更新・保存しました。")
+        except Exception as e:
+            print(f"   ⚠️ [Error] Favorites保存失敗: {e}")
+
+def clean_garbage_images(fav_set=None):
     """不要な画像を削除し、リアルタイムにログを表示する (Smart Scan対応)"""
     print(f"\n [Cleaning] 画像クリーニング処理開始...")
     if not is_safe_directory(GROK_ROOT_DIR):
@@ -217,7 +293,7 @@ def clean_garbage_images():
                         should_remove, reason = True, f"Mode: {img.mode}"
             
             if should_remove:
-                print(f"\n   🗑️ [削除] {file_path.name} ({reason})", flush=True)
+                print(f"\r   🗑️ [削除] {file_path.name} ({reason})", flush=True)
                 os.remove(file_path)
                 count += 1
         except Exception:
@@ -225,6 +301,11 @@ def clean_garbage_images():
     
     print() # Progress bar cleanup
     print(f"   [OK] 処理完了")
+    
+    # 3. Duplicate Check
+    if scan_targets:
+        remove_content_duplicates(scan_targets, fav_set)
+        
     return count
 
 def organize_prompts():
@@ -489,15 +570,23 @@ def generate_viewer_html(fav_set):
         .count {{ font-size: 0.8rem; opacity: 0.6; background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 10px; }}
         #main {{ flex: 1; overflow-y: scroll; scrollbar-gutter: stable; padding: 20px; position: relative; scroll-behavior: smooth; }}
         .group {{ margin-bottom: 40px; background: var(--card-bg); border-radius: 8px; padding: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }}
-        .prompt-header {{ margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }}
-        .prompt-meta {{ font-size: 0.85rem; color: #888; margin-bottom: 5px; }}
-        .prompt-text {{ white-space: pre-wrap; font-size: 1rem; line-height: 1.6; color: #fff; }}
+        .prompt-header {{ margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 5px; }}
+        .prompt-top-row {{ display: flex; align-items: center; gap: 10px; }}
+        .prompt-ctrl {{ display: flex; align-items: center; cursor: pointer; user-select: none; padding: 5px; border-radius: 4px; transition: background 0.2s; width: fit-content; }}
+        .prompt-ctrl:hover {{ background: rgba(255,255,255,0.05); }}
+        .prompt-meta {{ font-size: 0.85rem; color: #888; margin-left: 5px; }}
+        .prompt-text {{ white-space: pre-wrap; font-size: 1rem; line-height: 1.6; color: #fff; cursor: text; user-select: text; width: 100%; display: block; }}
+        .prompt-copy-btn {{ 
+            width: 24px; height: 24px; background: rgba(255,255,255,0.1); color: #ccc; border: none; border-radius: 4px;
+            cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1rem;
+            transition: all 0.2s; flex-shrink: 0;
+        }}
+        .prompt-copy-btn:hover {{ background: var(--accent); color: #000; }}
         .media-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; align-items: start; }}
         .media-item {{ background: #000; cursor: pointer; border-radius: 4px; overflow: hidden; position: relative; }}
         .media-item img, .media-item video {{ width: 100%; height: auto; display: block; transition: transform 0.2s; }}
         .media-item:hover img {{ transform: scale(1.02); }}
-        .video-label {{ position: absolute; top: 5px; right: 5px; background: rgba(0,0,0,0.7); color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; pointer-events: auto; cursor: pointer; transition: background 0.2s; }}
-        .video-label:hover {{ background: rgba(187, 134, 252, 0.8); color: black; }}
+
         .media-item.selected {{ outline: 3px solid var(--accent); z-index: 5; }}
         #modal {{ display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1000; justify-content: center; align-items: center; }}
         #modal.active {{ display: flex; }}
@@ -513,6 +602,19 @@ def generate_viewer_html(fav_set):
         .toggle-icon {{ cursor: pointer; display: inline-block; margin-right: 8px; transition: transform 0.2s; user-select: none; }}
         .group.collapsed .toggle-icon {{ transform: rotate(-90deg); }}
         .group.collapsed .media-grid {{ display: none; }}
+        .copy-btn {{
+            position: absolute; top: 5px; right: 5px; width: 24px; height: 24px;
+            background: rgba(0,0,0,0.6); color: white; border-radius: 4px;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 14px; cursor: pointer; opacity: 1; transition: background 0.2s;
+            z-index: 10;
+        }}
+        .copy-btn:hover {{ background: var(--accent); color: black; }}
+        .video-label {{ position: absolute; bottom: 5px; right: 5px; background: rgba(0,0,0,0.7); color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; pointer-events: none; white-space: nowrap; }}
+        .modal-action-btn {{ position: absolute; top: 20px; color: white; background: rgba(0,0,0,0.5); padding: 5px 10px; border-radius: 5px; cursor: pointer; z-index: 1002; display: flex; align-items: center; gap: 5px; transition: background 0.2s; }}
+        .modal-action-btn:hover {{ background: rgba(187, 134, 252, 0.8); color: black; }}
+        .close-hint {{ right: 20px; }}
+        .modal-copy-hint {{ right: 80px; width: 30px; justify-content: center; }}
     </style>
 </head>
 <body>
@@ -529,7 +631,13 @@ def generate_viewer_html(fav_set):
         <div id="nav-buttons"><button class="nav-btn" onclick="scrollToTop()">▲</button><button class="nav-btn" onclick="scrollToBottom()">▼</button><button class="nav-btn" onclick="scrollGroup('prev')">↑</button><button class="nav-btn" onclick="scrollGroup('next')">↓</button></div>
     </div>
     <div id="main"><div id="content-area"></div></div>
-    <div id="modal" onclick="closeModal(event)"><div class="close-hint" onclick="closeModal(event)">Close</div><button class="modal-nav modal-prev" onclick="navigateModal(-1, event)">&#10094;</button><button class="modal-nav modal-next" onclick="navigateModal(1, event)">&#10095;</button><div id="modal-content" onclick="event.stopPropagation()"></div></div>
+    <div id="modal" onclick="closeModal(event)">
+        <div class="modal-action-btn close-hint" onclick="closeModal(event)">Close</div>
+        <div id="modal-copy-btn" class="modal-action-btn modal-copy-hint" onclick="event.stopPropagation()">&#10064;</div>
+        <button class="modal-nav modal-prev" onclick="navigateModal(-1, event)">&#10094;</button>
+        <button class="modal-nav modal-next" onclick="navigateModal(1, event)">&#10095;</button>
+        <div id="modal-content" onclick="event.stopPropagation()"></div>
+    </div>
     <script>
         const data = {json_data}; const dates = {dates_json};
         let currentFilter = 'all', currentDate = null, isSearchMode = false, currentMediaList = [], currentMediaIndex = -1;
@@ -562,11 +670,36 @@ def generate_viewer_html(fav_set):
             const baseIndex = currentMediaList.length; group.media.forEach(m => currentMediaList.push(m));
             const div = document.createElement('div'); div.className = 'group';
             const header = document.createElement('div'); header.className = 'prompt-header';
-            header.onclick = () => toggleGroup(div); header.style.cursor = 'pointer';
             if (group.prompt) {{
                 const label = dateLabel ? `[${{dateLabel}}] ` : '';
-                header.innerHTML = `<span class="toggle-icon">▼</span><div class="prompt-meta" style="display:inline;">${{label}}${{new Date(group.prompt.time * 1000).toLocaleString()}}</div><div class="prompt-text">${{group.prompt.content}}</div>`;
-            }} else header.innerHTML = '<span class="toggle-icon">▼</span><div class="no-prompt" style="display:inline;">画像のみ</div>';
+                
+                // 1. Top Row (Control Areas + Copy Button)
+                const topRow = document.createElement('div'); topRow.className = 'prompt-top-row';
+
+                const ctrl = document.createElement('div'); ctrl.className = 'prompt-ctrl';
+                ctrl.onclick = () => toggleGroup(div);
+                ctrl.innerHTML = `<span class="toggle-icon">▼</span><div class="prompt-meta">${{label}}${{new Date(group.prompt.time * 1000).toLocaleString()}}</div>`;
+                topRow.appendChild(ctrl);
+
+                const copyBtn = document.createElement('div'); copyBtn.className = 'prompt-copy-btn';
+                copyBtn.innerHTML = '&#10064;'; // Copy icon
+                copyBtn.title = 'プロンプト全文をコピー';
+                copyBtn.onclick = () => copyToClipboard(group.prompt.content, copyBtn, true);
+                topRow.appendChild(copyBtn);
+
+                header.appendChild(topRow);
+
+                // 2. Prompt Text (Full Width)
+                const text = document.createElement('div'); text.className = 'prompt-text';
+                text.innerText = group.prompt.content;
+                header.appendChild(text);
+
+            }} else {{
+                // No prompt case
+                header.style.cursor = 'pointer';
+                header.onclick = () => toggleGroup(div);
+                header.innerHTML = '<div class="prompt-ctrl"><span class="toggle-icon">▼</span><div class="no-prompt" style="display:inline;">画像のみ</div></div>';
+            }}
             div.appendChild(header);
             const grid = document.createElement('div'); grid.className = 'media-grid';
             group.media.forEach((m, i) => {{
@@ -576,7 +709,12 @@ def generate_viewer_html(fav_set):
                 item.onclick = (e) => handleItemClick(e, globalIdx, m.type);
                 item.draggable = true; 
                 item.ondragstart = (e) => handleDragStart(e, globalIdx, m);
-                item.innerHTML = m.type === 'video' ? `<video src="${{m.path}}#t=0.1" muted></video><div class="video-label" onclick="event.stopPropagation(); copyToClipboard('${{m.path}}', this)">VIDEO</div>` : `<img src="${{m.path}}" loading="lazy">`;
+                
+                const copyBtn = `<div class="copy-btn" onclick="event.stopPropagation(); copyToClipboard('${{m.path}}', this)">&#10064;</div>`;
+                const videoLabel = m.type === 'video' ? `<div class="video-label">VIDEO</div>` : '';
+                const content = m.type === 'video' ? `<video src="${{m.path}}#t=0.1" muted playsinline onmouseover="this.play()" onmouseout="this.pause(); this.currentTime=0.1;"></video>` : `<img src="${{m.path}}" loading="lazy">`;
+                
+                item.innerHTML = content + videoLabel + copyBtn;
                 grid.appendChild(item);
             }});
             div.appendChild(grid); parent.appendChild(div);
@@ -592,6 +730,14 @@ def generate_viewer_html(fav_set):
         function openModalByIndex(idx) {{
             currentMediaIndex = idx; const m = currentMediaList[idx]; const modal = document.getElementById('modal'); const content = document.getElementById('modal-content');
             content.innerHTML = m.type === 'video' ? `<video src="${{m.path}}" controls autoplay></video>` : `<img src="${{m.path}}">`; modal.classList.add('active');
+            
+            // Setup Modal Copy Button
+            const copyBtn = document.getElementById('modal-copy-btn');
+            copyBtn.onclick = (e) => {{
+                e.stopPropagation();
+                copyToClipboard(m.path, copyBtn);
+            }};
+            copyBtn.innerHTML = '&#10064;'; // Reset icon
         }}
         function navigateModal(dir, e) {{ if (e) e.stopPropagation(); const n = currentMediaIndex + dir; if (n >= 0 && n < currentMediaList.length) openModalByIndex(n); }}
         function closeModal(e) {{ if (e && e.target.id !== 'modal' && !e.target.classList.contains('close-hint')) return; document.getElementById('modal').classList.remove('active'); document.getElementById('modal-content').innerHTML = ''; }}
@@ -660,22 +806,26 @@ def generate_viewer_html(fav_set):
                 e.dataTransfer.setData('DownloadURL', `${{mime}}:${{m.name}}:${{url}}`);
             }}
         }}
-        function copyToClipboard(relPath, btn) {{
+        function copyToClipboard(content, btn, isText = false) {{
              try {{
-                let basePath = window.location.pathname;
-                if (basePath.match(/^\/[a-zA-Z]:\//)) basePath = basePath.substring(1);
-                basePath = decodeURIComponent(basePath);
-                const dirName = basePath.substring(0, basePath.lastIndexOf('/') + 1);
-                let fullPath = dirName + relPath;
-                fullPath = fullPath.replace(/\//g, '\\\\');
-                navigator.clipboard.writeText(fullPath).then(() => {{
-                    const originalText = btn.innerText;
-                    btn.innerText = "COPIED!";
-                    setTimeout(() => btn.innerText = originalText, 1500);
+                let textToCopy = content;
+                if (!isText) {{
+                    let basePath = window.location.pathname;
+                    if (basePath.match(/^\/[a-zA-Z]:\//)) basePath = basePath.substring(1);
+                    basePath = decodeURIComponent(basePath);
+                    const dirName = basePath.substring(0, basePath.lastIndexOf('/') + 1);
+                    let fullPath = dirName + content;
+                    fullPath = fullPath.replace(/\//g, '\\\\');
+                    textToCopy = fullPath;
+                }}
+                navigator.clipboard.writeText(textToCopy).then(() => {{
+                    const originalText = btn.innerHTML;
+                    btn.innerHTML = "&#10003;"; // Checkmark
+                    setTimeout(() => btn.innerHTML = originalText, 1500);
                 }}).catch(err => alert('Copy failed: ' + err));
              }} catch (e) {{ alert('Error: ' + e); }}
         }}
-    </script>
+</script>
 </body></html>"""
 
     try:
@@ -688,13 +838,13 @@ def generate_viewer_html(fav_set):
 
 def main():
     print("=" * 60)
-    print(f"{Fore.CYAN}Grok Organizer (v3.2.0){Style.RESET_ALL} - 画像整理 & ビューアー生成")
+    print(f"{Fore.CYAN}Grok Organizer (v3.5.0){Style.RESET_ALL} - 画像整理 & ビューアー生成")
     print("=" * 60)
     try:
         move_videos()
-        clean_garbage_images() 
         organize_prompts()
         fav_set = organize_favorites()
+        clean_garbage_images(fav_set) 
         generate_viewer_html(fav_set) 
         print("-" * 60)
         print(f" [Done] 全ての整理が完了しました。")
