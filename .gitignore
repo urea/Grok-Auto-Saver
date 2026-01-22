@@ -11,7 +11,7 @@ Grok_Viewer.html
 .vscode/
 
 # Build artifacts
-**/.venv/
+.venv/
 build/
 dist/
 *.spec
