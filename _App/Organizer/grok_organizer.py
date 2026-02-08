@@ -767,20 +767,21 @@ def generate_viewer_html(fav_set):
             else {{ for (let i = groups.length - 1; i >= 0; i--) if (groups[i].offsetTop < cur - 5) {{ groups[i].scrollIntoView({{ behavior: 'smooth' }}); return; }} scrollToTop(); }}
         }}
         function handleItemClick(e, idx, type) {{
-            if (type === 'video') {{ openModalByIndex(idx); return; }}
             if (e.ctrlKey) {{
                 // Toggle selection
                 if (selectedIndices.has(idx)) selectedIndices.delete(idx);
                 else selectedIndices.add(idx);
                 updateSelectionVisuals();
-            }} else {{
-                // Normal click
-                if (selectedIndices.size > 0) {{
-                    selectedIndices.clear();
-                    updateSelectionVisuals();
-                }}
-                openModalByIndex(idx);
+                return;
             }}
+            if (type === 'video') {{ openModalByIndex(idx); return; }}
+            
+            // Normal click
+            if (selectedIndices.size > 0) {{
+                selectedIndices.clear();
+                updateSelectionVisuals();
+            }}
+            openModalByIndex(idx);
         }}
         function toggleGroup(groupDiv) {{
             groupDiv.classList.toggle('collapsed');
@@ -792,20 +793,19 @@ def generate_viewer_html(fav_set):
                 else el.classList.remove('selected');
             }});
         }}
+        function getFullPath(relPath) {{
+            let bp = window.location.pathname;
+            if (bp.match(/^\/[a-zA-Z]:\//)) bp = bp.substring(1);
+            bp = decodeURIComponent(bp);
+            const dn = bp.substring(0, bp.lastIndexOf('/') + 1);
+            return (dn + relPath).replace(/\//g, '\\\\');
+        }}
         function handleDragStart(e, idx, m) {{
-            // Construct full path helper (same logic as copyToClipboard)
-            const getFullPath = (relPath) => {{
-                let bp = window.location.pathname;
-                if (bp.match(/^\/[a-zA-Z]:\//)) bp = bp.substring(1);
-                bp = decodeURIComponent(bp);
-                const dn = bp.substring(0, bp.lastIndexOf('/') + 1);
-                return (dn + relPath).replace(/\//g, '\\\\');
-            }};
-
             if (selectedIndices.has(idx)) {{
                 // Batch drag
                 const files = [];
-                selectedIndices.forEach(i => {{
+                const sortedIndices = Array.from(selectedIndices).sort((a, b) => a - b);
+                sortedIndices.forEach(i => {{
                     const media = currentMediaList[i];
                     if (media.type !== 'video') files.push(getFullPath(media.path));
                 }});
@@ -828,13 +828,19 @@ def generate_viewer_html(fav_set):
              try {{
                 let textToCopy = content;
                 if (!isText) {{
-                    let basePath = window.location.pathname;
-                    if (basePath.match(/^\/[a-zA-Z]:\//)) basePath = basePath.substring(1);
-                    basePath = decodeURIComponent(basePath);
-                    const dirName = basePath.substring(0, basePath.lastIndexOf('/') + 1);
-                    let fullPath = dirName + content;
-                    fullPath = fullPath.replace(/\//g, '\\\\');
-                    textToCopy = fullPath;
+                    if (selectedIndices.size > 0) {{
+                        // Batch Copy
+                        const paths = [];
+                        const sortedIndices = Array.from(selectedIndices).sort((a, b) => a - b);
+                        sortedIndices.forEach(i => {{
+                            const media = currentMediaList[i];
+                            paths.push(getFullPath(media.path));
+                        }});
+                        textToCopy = paths.join('\\n');
+                    }} else {{
+                        // Single Copy with full path resolution
+                        textToCopy = getFullPath(content);
+                    }}
                 }}
                 navigator.clipboard.writeText(textToCopy).then(() => {{
                     const originalText = btn.innerHTML;
