@@ -7,7 +7,7 @@ const CONFIG = {
     targetAlt: "Generated image",
     videoUrlPattern: "/post/",
     downloadButtonSelector: 'button[aria-label="ダウンロード"]',
-    promptSelector: "div.bg-surface-l1.px-4.py-2.z-10.w-fit.truncate.rounded-full.sticky"
+    promptSelector: "div.bg-surface-l1.truncate.rounded-full.sticky"
 };
 
 const processedCache = new Set();
